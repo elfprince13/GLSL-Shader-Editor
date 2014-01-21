@@ -1,0 +1,1 @@
+A syntax-highlighting GLSL (3.30) shader editor, to be integrated with the FreeBuild/J codebase. End-goal is to support live-editing and configuration of multi-stage shader pipelines (for example, for deferred and inferred renderers).
