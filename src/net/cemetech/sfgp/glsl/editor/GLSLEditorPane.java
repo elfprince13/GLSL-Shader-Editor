@@ -5,15 +5,18 @@ import java.awt.BorderLayout;
 import org.jdesktop.swingx.*;
 import org.jdesktop.swingx.MultiSplitLayout.Node;
 
+import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.LayoutManager;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.beans.PropertyChangeEvent;
@@ -35,7 +38,11 @@ import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JList;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
+import javax.swing.JSeparator;
 import javax.swing.JSplitPane;
 import javax.swing.JToolBar;
 import javax.swing.JEditorPane;
@@ -44,6 +51,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
+import javax.swing.KeyStroke;
 import javax.swing.WindowConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -62,6 +70,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 	JButton openShader;
 	JButton resetPipeline;
 	JButton openPipeline;
+	JPanel welcomePanel;
 
 	JList assetsList;
 	JList<String> targetsList;
@@ -79,16 +88,87 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 
 			@Override
 			public void run() {
+				JMenuBar mb = new JMenuBar();
+				JMenu file, edit, run;
+				final JMenuItem save, open, newMenu, openPipe, resetPipe, compile;
+				
+				file = new JMenu("File");
+				edit = new JMenu("Edit");
+				run = new JMenu("Run");
+				
+				newMenu = new JMenuItem("New");
+				newMenu.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,ActionEvent.META_MASK));
+				file.add(newMenu);
+				
+				open = new JMenuItem("Open");
+				open.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O,ActionEvent.META_MASK));
+				file.add(open);
+				
+				save = new JMenuItem("Save");
+				save.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S,ActionEvent.META_MASK));
+				file.add(save);
+				
+				file.add(new JSeparator());
+				
+				resetPipe = new JMenuItem("Reset Pipeline");
+				resetPipe.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,ActionEvent.META_MASK | ActionEvent.SHIFT_MASK));
+				file.add(resetPipe);
+				
+				openPipe = new JMenuItem("Open Pipeline");
+				openPipe.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O,ActionEvent.META_MASK | ActionEvent.SHIFT_MASK));
+				file.add(openPipe);
+				
+				compile = new JMenuItem("Compile");
+				compile.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, ActionEvent.META_MASK));
+				run.add(compile);
+				
+				mb.add(file);
+				mb.add(edit);
+				mb.add(run);
+				
 				JFrame f = new JFrame("SFGP Shader Editor");
+				f.setJMenuBar(mb);
 				final Container c = f.getContentPane();
 				c.setLayout(new BorderLayout());
-				c.add(new GLSLEditorPane(""), BorderLayout.CENTER);
+				final GLSLEditorPane editor = new GLSLEditorPane("");
+				c.add(editor, BorderLayout.CENTER);
 				c.doLayout();
 
 
 				f.setSize(1000, 700);
 				f.setVisible(true);
 				f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+				
+				ActionListener menuListener = new ActionListener() {
+					public void actionPerformed(ActionEvent e){
+						if (e.getSource() == save) {
+							editor.saveCurrent();
+						} else if (e.getSource() == compile) {
+							editor.compileCurrent();
+						} else if (e.getSource() == open) {
+							ActionEvent relay = new ActionEvent(editor.openShader, e.getID(), e.getActionCommand());
+							editor.actionPerformed(relay);
+						} else if (e.getSource() == newMenu) {
+							ActionEvent relay = new ActionEvent(editor.newShader, e.getID(), e.getActionCommand());
+							editor.actionPerformed(relay);
+						} else if (e.getSource() == openPipe) {
+							ActionEvent relay = new ActionEvent(editor.openPipeline, e.getID(), e.getActionCommand());
+							editor.actionPerformed(relay);
+						} else if (e.getSource() == resetPipe) {
+							ActionEvent relay = new ActionEvent(editor.resetPipeline, e.getID(), e.getActionCommand());
+							editor.actionPerformed(relay);
+						} else {
+							throw new IllegalStateException("Imaginary menu item registered an ActionEvent: " + e.getSource());
+						}
+					}
+				};
+				
+				compile.addActionListener(menuListener);
+				newMenu.addActionListener(menuListener);
+				open.addActionListener(menuListener);
+				save.addActionListener(menuListener);
+				resetPipe.addActionListener(menuListener);
+				openPipe.addActionListener(menuListener);
 
 			}
 		});
@@ -113,7 +193,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 		resetPipeline = new JButton("Reset Pipeline Configuration");
 		resetPipeline.addActionListener(this);
 		
-		JPanel welcomePanel = new JPanel(new BorderLayout());
+		welcomePanel = new JPanel(new BorderLayout());
 		welcomePanel.add(new JLabel("Welcome!"), BorderLayout.NORTH);
 		welcomePanel.add(newShader, BorderLayout.WEST);
 		welcomePanel.add(openShader, BorderLayout.CENTER);
@@ -180,6 +260,15 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 			Node model = editorLayout.getModel();
 			e.writeObject(model);
 			e.close();
+	}
+	
+	private class ProjectPanel extends JPanel {
+		ShaderCheckBox[] shaderStages;
+		private ProjectPanel(ShaderCheckBox[] shaderStages, LayoutManager layout) 
+		{ super(layout); this.shaderStages = shaderStages; }
+		
+		public void setStage(int stage, ShaderCheckBox box) { shaderStages[stage] = box; }
+		public ShaderCheckBox getStage(int stage) {	return shaderStages[stage]; }
 	}
 	
 	private class ShaderCheckBox extends JCheckBox implements ItemListener {
@@ -298,7 +387,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 				thisProjectDocs.setTabPlacement(JTabbedPane.TOP);
 			    thisProjectDocs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
 			     
-				JPanel managePanel = new JPanel(new BorderLayout());
+				ProjectPanel managePanel = new ProjectPanel(new ShaderCheckBox[assemblyStages.length], new BorderLayout());
 				managePanel.add(new JLabel("Manage Shader Pipeline Stages:"), BorderLayout.NORTH);
 				JPanel switchPanel = new JPanel(new FlowLayout());
 				managePanel.add(switchPanel,BorderLayout.CENTER);
@@ -314,7 +403,9 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 					File stagePath = new File(selected, assemblyStages[i]);
 					try{
 						addCodeTab(thisProjectDocs, stagePath, i, opening, starting);
-						switchPanel.add(new ShaderCheckBox(thisProjectDocs, selected, assemblyStages[i], stagePath.canRead()));
+						ShaderCheckBox scb = new ShaderCheckBox(thisProjectDocs, selected, assemblyStages[i], stagePath.canRead());
+						switchPanel.add(scb);
+						managePanel.setStage(i, scb);
 					} catch (IOException ioe) {
 						ioe.printStackTrace();
 						return;
@@ -374,6 +465,32 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 				Files.write(stagePath.toPath(), GLSLEditorPane.shaderTemplate.getBytes());
 			}
 		}
+	}
+	
+	public void saveCurrent() {
+		Component currentTab = (projectsPane.getSelectedComponent());
+		if ((currentTab instanceof JPanel) && currentTab == welcomePanel) { 
+			return;
+		} else if ((currentTab instanceof JSplitPane) && ((JSplitPane)currentTab).getTopComponent() instanceof JTabbedPane) {
+			ProjectPanel project = (ProjectPanel)(((JTabbedPane)(((JSplitPane)currentTab).getTopComponent())).getComponentAt(0));
+			for(int i = 0; i < assemblyStages.length; i++){
+				ShaderCheckBox scb = project.getStage(i);
+				int tabIndex = scb.parent.indexOfTab(scb.target);
+				JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
+				try {
+					Files.write((new File(scb.source,scb.target)).toPath(), ((JEditorPane)(jsp.getViewport().getView())).getText().getBytes());
+				} catch (IOException e) {
+					e.printStackTrace();
+					return;
+				}
+			}
+		} else {
+			throw new IllegalStateException("An unknown tab has appeared. Run away?");
+		}
+	}
+	
+	public void compileCurrent() {
+		
 	}
 	
 	public int stageIndex(String stageName){
