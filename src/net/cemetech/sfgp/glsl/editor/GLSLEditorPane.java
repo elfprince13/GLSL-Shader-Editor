@@ -12,8 +12,12 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.beans.XMLDecoder;
 import java.beans.XMLEncoder;
 import java.io.BufferedInputStream;
@@ -27,9 +31,12 @@ import java.nio.file.Files;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JSplitPane;
 import javax.swing.JToolBar;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
@@ -38,10 +45,13 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.WindowConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.Document;
 
 import jsyntaxpane.DefaultSyntaxKit;
 
-public class GLSLEditorPane extends JPanel implements ActionListener {
+public class GLSLEditorPane extends JPanel implements ActionListener, DocumentListener, PropertyChangeListener {
 
 	MultiSplitPane editorUI;
 	MultiSplitLayout editorLayout;
@@ -59,6 +69,8 @@ public class GLSLEditorPane extends JPanel implements ActionListener {
 	JList stagesList;
 	
 	String[] assemblyStages = {"vertex.vert", "geometry.geom", "fragment.frag"};
+	
+	public static String shaderTemplate = "#version 330 core\n\nvoid main() {\n\t// TODO auto-generated shader stub\n}\n";
 	
 	File lastDir = null;
 	
@@ -90,6 +102,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener {
 		
 		projectsPane = new JTabbedPane();
 		projectsPane.setTabPlacement(JTabbedPane.TOP);
+	    projectsPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
 		
 		newShader = new JButton("New Shader");
 		newShader.addActionListener(this);
@@ -108,25 +121,11 @@ public class GLSLEditorPane extends JPanel implements ActionListener {
 		welcomePanel.add(resetPipeline, BorderLayout.SOUTH);
 		
 		projectsPane.addTab("Welcome", welcomePanel);
-		/*
-		projectsPane.addTab("test 1", new JPanel());
-		projectsPane.setTabComponentAt(projectsPane.getTabCount() - 1, new CloseableTab());
-		projectsPane.addTab("test 2", new JPanel());
-		projectsPane.setTabComponentAt(projectsPane.getTabCount() - 1, new CloseableTab());
-		projectsPane.addTab("test 3", new JPanel());
-		projectsPane.setTabComponentAt(projectsPane.getTabCount() - 1, new CloseableTab());
-		projectsPane.addTab("test 4", new JPanel());
-		projectsPane.setTabComponentAt(projectsPane.getTabCount() - 1, new CloseableTab());
-		projectsPane.addTab("test 5", new JPanel());
-		projectsPane.setTabComponentAt(projectsPane.getTabCount() - 1, new CloseableTab());
-		projectsPane.addTab("test 6", new JPanel());
-		projectsPane.setTabComponentAt(projectsPane.getTabCount() - 1, new CloseableTab());
-		//*/
 		
 		JPanel assetsPanel = new JPanel(new BorderLayout());
 		assetsPanel.add(new JLabel("Assets:"),BorderLayout.NORTH);
 		assetsList = new JList();
-		assetsPanel.add(assetsList,BorderLayout.CENTER);
+		assetsPanel.add(new JScrollPane(assetsList),BorderLayout.CENTER);
 		JPanel assetsButtons = new JPanel(new FlowLayout());
 		assetsButtons.add(new JButton("Model"));
 		assetsButtons.add(new JButton("Texture"));
@@ -135,13 +134,13 @@ public class GLSLEditorPane extends JPanel implements ActionListener {
 		JPanel targetsPanel = new JPanel(new BorderLayout());
 		targetsPanel.add(new JLabel("Targets:"),BorderLayout.NORTH);
 		targetsList = new JList<String>(defaultTargets);
-		targetsPanel.add(targetsList,BorderLayout.CENTER);
+		targetsPanel.add(new JScrollPane(targetsList),BorderLayout.CENTER);
 		targetsPanel.add(new JButton("Framebuffer"),BorderLayout.SOUTH);
 		
 		JPanel stagesPanel = new JPanel(new BorderLayout());
 		stagesPanel.add(new JLabel("Stages:"),BorderLayout.NORTH);
 		stagesList = new JList();
-		stagesPanel.add(stagesList,BorderLayout.CENTER);
+		stagesPanel.add(new JScrollPane(stagesList),BorderLayout.CENTER);
 		stagesPanel.add(new JButton("Shader"),BorderLayout.SOUTH);
 		
 		editorUI = new MultiSplitPane();
@@ -181,6 +180,66 @@ public class GLSLEditorPane extends JPanel implements ActionListener {
 			Node model = editorLayout.getModel();
 			e.writeObject(model);
 			e.close();
+	}
+	
+	private class ShaderCheckBox extends JCheckBox implements ItemListener {
+		
+		JTabbedPane parent;
+		File source;
+		String target;
+		private ShaderCheckBox(JTabbedPane parent, File source, String target, boolean initState) {
+			super(target,initState);
+			this.parent = parent;
+			this.source = source;
+			this.target = target;
+			addItemListener(this);
+		}
+
+		@Override
+		public void itemStateChanged(ItemEvent e) {
+			try{
+				File shaderSource = new File(source, target);
+				boolean canOpen = shaderSource.canRead();
+				if(e.getStateChange() == ItemEvent.SELECTED) {
+					int answer = JOptionPane.CANCEL_OPTION;
+					if(!canOpen){
+						answer = JOptionPane.showConfirmDialog(null, "Shader assembly stage '" + target + "' does not exist (or can't be read). Would you like to create it?", "Create shader assembly stage?",JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+					}
+					
+					if (canOpen || answer == JOptionPane.OK_OPTION){
+						GLSLEditorPane.this.addCodeTab(parent, shaderSource, stageIndex(target), canOpen, !canOpen);
+					} else {
+						ShaderCheckBox.this.setSelected(false);
+					}
+				} else if (e.getStateChange() == ItemEvent.DESELECTED) {
+					int toRemove = parent.indexOfTab(target);
+					if (toRemove > 0){
+						parent.removeTabAt(toRemove);
+					}
+					
+					int shouldDelete = JOptionPane.CANCEL_OPTION;
+					String[] options = {"Yes, delete this file", "No, temporarily disable it only"};
+					if (canOpen){
+						shouldDelete = JOptionPane.showOptionDialog(null, "Shader assembly stage '" + target + 
+								"' still exists on disk. Would you like to erase it? \n\n" +
+								" \u2022 If you choose to delete it, it might not be recoverable. \n" + 
+								" \u2022 If you choose not to delete it, it will be re-enabled automatically the next time this shader is opened.", 
+								"Erase shader source from disk?",JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[1]);
+					}
+					
+					if (shouldDelete == JOptionPane.OK_OPTION){
+						Files.deleteIfExists(shaderSource.toPath());
+					}
+				} else {
+					throw new IllegalStateException("An item state change must be either SELECTED or DESELECTED");
+				}
+			} catch (IOException ioe) {
+				ioe.printStackTrace();
+				return;
+			}
+
+		}
+		
 	}
 	
 	private class CloseableTab extends JPanel implements ActionListener{
@@ -226,52 +285,130 @@ public class GLSLEditorPane extends JPanel implements ActionListener {
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
+		Object source = e.getSource();
 		JFileChooser j = new JFileChooser();
 		if (lastDir != null) j.setCurrentDirectory(lastDir);
-		if(e.getSource() == openShader) {
+		if(source == openShader || source == newShader) {
+			boolean opening = source == openShader;
+			boolean starting = source == newShader;
 			j.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-			int status = j.showOpenDialog(this);
+			int status = opening ? j.showOpenDialog(this) : j.showSaveDialog(this);
 			if(status == JFileChooser.APPROVE_OPTION) {
-				JTabbedPane thisProject = new JTabbedPane();
-				thisProject.addTab("Manage", new JPanel());
+				JTabbedPane thisProjectDocs = new JTabbedPane();
+				thisProjectDocs.setTabPlacement(JTabbedPane.TOP);
+			    thisProjectDocs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+			     
+				JPanel managePanel = new JPanel(new BorderLayout());
+				managePanel.add(new JLabel("Manage Shader Pipeline Stages:"), BorderLayout.NORTH);
+				JPanel switchPanel = new JPanel(new FlowLayout());
+				managePanel.add(switchPanel,BorderLayout.CENTER);
+				
+				thisProjectDocs.addTab("Manage", managePanel);
+				
 				File selected = j.getSelectedFile();
+				if(starting && !selected.mkdirs()){
+					System.err.println("Unable to create shader directory");
+					return;
+				}
 				for(int i = 0; i < assemblyStages.length; i++){
 					File stagePath = new File(selected, assemblyStages[i]);
-					if (stagePath.canRead()) {
-						JEditorPane codeEditor = new JEditorPane();
-						JScrollPane scrPane = new JScrollPane(codeEditor);
-						
-						thisProject.addTab(assemblyStages[i],scrPane);
-						
-						codeEditor.setContentType("text/glsl");
-						try{
-							codeEditor.setText(new String(Files.readAllBytes(stagePath.toPath())));
-						} catch (IOException ioe) {
-							ioe.printStackTrace();
-							return;
-						}
+					try{
+						addCodeTab(thisProjectDocs, stagePath, i, opening, starting);
+						switchPanel.add(new ShaderCheckBox(thisProjectDocs, selected, assemblyStages[i], stagePath.canRead()));
+					} catch (IOException ioe) {
+						ioe.printStackTrace();
+						return;
 					}
-					
 				}
+				JPanel errorPanel = new JPanel(new BorderLayout());
+				errorPanel.add(new JLabel("Issues:"), BorderLayout.NORTH);
+				JList<String> thisProjectLog = new JList<String>();
+				errorPanel.add(new JScrollPane(thisProjectLog),BorderLayout.CENTER);
+				JSplitPane thisProject = new JSplitPane(JSplitPane.VERTICAL_SPLIT, thisProjectDocs, errorPanel);
 				
 				try {
+					int newTabIndex = projectsPane.getTabCount();
 					projectsPane.addTab(selected.getCanonicalPath(), thisProject);
-					projectsPane.setTabComponentAt(projectsPane.getTabCount() - 1, new CloseableTab());
+					projectsPane.setTabComponentAt(newTabIndex, new CloseableTab());
+					projectsPane.setSelectedIndex(newTabIndex);
 				} catch (IOException ioe) {
 					ioe.printStackTrace();
 					return;
 				}
 				
 			}
-		} else if (e.getSource() == newShader) {
+		} else if (source == openPipeline) {
 			
-		} else if (e.getSource() == openPipeline) {
-			
-		} else if (e.getSource() == resetPipeline) {
+		} else if (source == resetPipeline) {
 			
 		} else {
 			throw new IllegalStateException("A mystery button was pushed!");
 		}
 		lastDir = j.getCurrentDirectory();
+	}
+	
+	public void addCodeTab(JTabbedPane thisProjectDocs, File stagePath, int stage, boolean opening, boolean starting) throws IOException {
+		if ((opening || (starting && stagePath.createNewFile())) && stagePath.canRead() && stagePath.canWrite()) {
+			JEditorPane codeEditor = new JEditorPane();
+			JScrollPane scrPane = new JScrollPane(codeEditor);
+			
+			boolean added = false;
+			for(int i = 1; i < thisProjectDocs.getTabCount() && !added; i++){
+				int otherStage = stageIndex(thisProjectDocs.getTitleAt(i));
+				if (otherStage > stage){
+					thisProjectDocs.insertTab(assemblyStages[stage], null, scrPane, "", i);
+					added = true;
+				}
+			}
+			if(!added) thisProjectDocs.addTab(assemblyStages[stage],scrPane);
+			 
+				
+			codeEditor.setContentType("text/glsl");
+			codeEditor.addPropertyChangeListener(this);
+		
+			if (opening){
+				codeEditor.setText(new String(Files.readAllBytes(stagePath.toPath())));
+			}
+			if (starting){
+				codeEditor.setText(GLSLEditorPane.shaderTemplate);
+				Files.write(stagePath.toPath(), GLSLEditorPane.shaderTemplate.getBytes());
+			}
+		}
+	}
+	
+	public int stageIndex(String stageName){
+		for(int i = 0; i < assemblyStages.length; i++) 
+			if (stageName.equals(assemblyStages[i])) 
+				return i;
+		return -1;
+	}
+
+	@Override
+	public void propertyChange(PropertyChangeEvent evt) {
+		 if ("document".equalsIgnoreCase(evt.getPropertyName())) {
+			    Document oldDocument = (Document)evt.getOldValue();
+			    if (oldDocument != null) {
+			      oldDocument.removeDocumentListener(this);
+			    }
+			    Document newDocument = (Document)evt.getNewValue();
+			    newDocument.removeDocumentListener(this);
+			    newDocument.addDocumentListener(this);
+		 }
+		 //System.out.println("Updated Document listener");
+	}
+
+	@Override
+	public void insertUpdate(DocumentEvent e) {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void removeUpdate(DocumentEvent e) {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void changedUpdate(DocumentEvent e) {
+		// TODO Auto-generated method stub
 	}
 }
