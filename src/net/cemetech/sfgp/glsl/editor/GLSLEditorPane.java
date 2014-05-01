@@ -476,12 +476,14 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 			for(int i = 0; i < assemblyStages.length; i++){
 				ShaderCheckBox scb = project.getStage(i);
 				int tabIndex = scb.parent.indexOfTab(scb.target);
-				JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
 				try {
+					JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
 					Files.write((new File(scb.source,scb.target)).toPath(), ((JEditorPane)(jsp.getViewport().getView())).getText().getBytes());
 				} catch (IOException e) {
 					e.printStackTrace();
 					return;
+				} catch (ArrayIndexOutOfBoundsException e) {
+					System.out.println("No " + scb.getText() + ", skipping.");
 				}
 			}
 		} else {
