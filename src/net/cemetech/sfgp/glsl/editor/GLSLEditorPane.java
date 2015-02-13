@@ -84,6 +84,8 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 	File lastDir = null;
 	
 	public static void main(String[] args) {
+		final String ldPath = (args.length > 0) ? args[0] : "";
+		
 		java.awt.EventQueue.invokeLater(new Runnable() {
 
 			@Override
@@ -130,7 +132,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 				f.setJMenuBar(mb);
 				final Container c = f.getContentPane();
 				c.setLayout(new BorderLayout());
-				final GLSLEditorPane editor = new GLSLEditorPane("");
+				final GLSLEditorPane editor = new GLSLEditorPane("",ldPath);
 				c.add(editor, BorderLayout.CENTER);
 				c.doLayout();
 
@@ -174,11 +176,16 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 		});
 	}
 
-	public GLSLEditorPane(String lastLayout) {
+	public GLSLEditorPane(String lastLayout, String lastDirPath) {
 		setLayout(new BorderLayout());
 		
 
 		GLSLSyntaxKit.initKit();
+		
+		File ldp = new File(lastDirPath);
+		if(ldp.isDirectory()){
+			lastDir = ldp;
+		}
 		
 		projectsPane = new JTabbedPane();
 		projectsPane.setTabPlacement(JTabbedPane.TOP);
@@ -376,7 +383,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 	public void actionPerformed(ActionEvent e) {
 		Object source = e.getSource();
 		JFileChooser j = new JFileChooser();
-		if (lastDir != null) j.setCurrentDirectory(lastDir);
+		j.setCurrentDirectory( (lastDir == null) ? (new File(".")) : lastDir);
 		if(source == openShader || source == newShader) {
 			boolean opening = source == openShader;
 			boolean starting = source == newShader;
