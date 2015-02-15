@@ -30,6 +30,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 
 import javax.swing.BorderFactory;
@@ -57,6 +58,10 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.Document;
 
+import org.lwjgl.*;
+import org.lwjgl.opengl.*;
+import org.lwjgl.opengl.GL11.*;
+
 import jsyntaxpane.DefaultSyntaxKit;
 
 public class GLSLEditorPane extends JPanel implements ActionListener, DocumentListener, PropertyChangeListener {
@@ -82,6 +87,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 	public static String shaderTemplate = "#version 330 core\n\nvoid main() {\n\t// TODO auto-generated shader stub\n}\n";
 	
 	File lastDir = null;
+	CompilerImpl compiler = null;
 	
 	public static void main(String[] args) {
 		final String ldPath = (args.length > 0) ? args[0] : "";
@@ -132,7 +138,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 				f.setJMenuBar(mb);
 				final Container c = f.getContentPane();
 				c.setLayout(new BorderLayout());
-				final GLSLEditorPane editor = new GLSLEditorPane("",ldPath);
+				final GLSLEditorPane editor = new GLSLEditorPane("",ldPath,null);
 				c.add(editor, BorderLayout.CENTER);
 				c.doLayout();
 
@@ -176,7 +182,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 		});
 	}
 
-	public GLSLEditorPane(String lastLayout, String lastDirPath) {
+	public GLSLEditorPane(String lastLayout, String lastDirPath, CompilerImpl c) {
 		setLayout(new BorderLayout());
 		
 
@@ -186,6 +192,8 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 		if(ldp.isDirectory()){
 			lastDir = ldp;
 		}
+		
+		compiler = c;
 		
 		projectsPane = new JTabbedPane();
 		projectsPane.setTabPlacement(JTabbedPane.TOP);
@@ -473,6 +481,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 			}
 		}
 	}
+
 	
 	public void saveCurrent() {
 		Component currentTab = (projectsPane.getSelectedComponent());
@@ -498,7 +507,44 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 		}
 	}
 	
+	
+	
 	public void compileCurrent() {
+		if(Display.isCreated()){
+			try{
+				if(!Display.isCurrent()){
+					Display.makeCurrent();
+				}
+				
+				Component currentTab = (projectsPane.getSelectedComponent());
+				if ((currentTab instanceof JPanel) && currentTab == welcomePanel) { 
+					return;
+				} else if ((currentTab instanceof JSplitPane) && ((JSplitPane)currentTab).getTopComponent() instanceof JTabbedPane) {
+					ProjectPanel project = (ProjectPanel)(((JTabbedPane)(((JSplitPane)currentTab).getTopComponent())).getComponentAt(0));
+					for(int i = 0; i < assemblyStages.length; i++){
+						ShaderCheckBox scb = project.getStage(i);
+						int tabIndex = scb.parent.indexOfTab(scb.target);
+						
+						
+						try {
+							System.out.println("Compiling " + scb.target);
+							//JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
+							//Files.write((new File(scb.source,scb.target)).toPath(), ((JEditorPane)(jsp.getViewport().getView())).getText().getBytes());
+						} catch (ArrayIndexOutOfBoundsException e) {
+							System.out.println("No " + scb.getText() + ", skipping.");
+						}
+						
+					}
+				} else {
+					throw new IllegalStateException("An unknown tab has appeared. Run away?");
+				}
+				
+			} catch(LWJGLException e) {
+				e.printStackTrace();
+			}
+		} else {
+			System.err.println("We have no display! Can't compile");
+		}
 		
 	}
 	
