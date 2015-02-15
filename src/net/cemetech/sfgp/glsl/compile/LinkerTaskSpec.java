@@ -7,6 +7,9 @@ public class LinkerTaskSpec extends TaskSpec<LinkerTaskSpec> {
 	public LinkerTaskSpec(List<TaskResult<CompilerTaskSpec>> input){
 		shaders = input;
 	}
+	
+	public List<TaskResult<CompilerTaskSpec>> getShaders(){ return shaders; }
+	
 	@Override
 	public TaskResult<LinkerTaskSpec> call() {
 		if(compiler == null){

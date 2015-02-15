@@ -7,6 +7,10 @@ public class CompilerTaskSpec extends TaskSpec<CompilerTaskSpec> {
 		kind = k;
 		src = s;
 	}
+	
+	public int getKind(){ return kind; }
+	public String getSrc(){ return src; }
+	
 	@Override
 	public TaskResult<CompilerTaskSpec> call() {
 		if(compiler == null){
