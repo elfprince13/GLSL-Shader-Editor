@@ -41,8 +41,6 @@ import javax.swing.text.Document;
 import org.jdesktop.swingx.MultiSplitLayout;
 import org.jdesktop.swingx.MultiSplitLayout.Node;
 import org.jdesktop.swingx.MultiSplitPane;
-import org.lwjgl.LWJGLException;
-import org.lwjgl.opengl.Display;
 
 public class GLSLEditorPane extends JPanel implements ActionListener, DocumentListener, PropertyChangeListener {
 
@@ -80,7 +78,6 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 		if(ldp.isDirectory()){
 			lastDir = ldp;
 		}
-		
 		compiler = c;
 		
 		projectsPane = new JTabbedPane();
@@ -398,40 +395,31 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 	
 	
 	public void compileCurrent() {
-		if(Display.isCreated()){
-			try{
-				if(!Display.isCurrent()){
-					Display.makeCurrent();
-				}
-				
-				Component currentTab = (projectsPane.getSelectedComponent());
-				if ((currentTab instanceof JPanel) && currentTab == welcomePanel) { 
-					return;
-				} else if ((currentTab instanceof JSplitPane) && ((JSplitPane)currentTab).getTopComponent() instanceof JTabbedPane) {
-					ProjectPanel project = (ProjectPanel)(((JTabbedPane)(((JSplitPane)currentTab).getTopComponent())).getComponentAt(0));
-					for(int i = 0; i < assemblyStages.length; i++){
-						ShaderCheckBox scb = project.getStage(i);
-						int tabIndex = scb.parent.indexOfTab(scb.target);
-						
-						
-						try {
-							System.out.println("Compiling " + scb.target);
-							//JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
-							//Files.write((new File(scb.source,scb.target)).toPath(), ((JEditorPane)(jsp.getViewport().getView())).getText().getBytes());
-						} catch (ArrayIndexOutOfBoundsException e) {
-							System.out.println("No " + scb.getText() + ", skipping.");
-						}
-						
+		if(compiler != null){
+			Component currentTab = (projectsPane.getSelectedComponent());
+			if ((currentTab instanceof JPanel) && currentTab == welcomePanel) { 
+				return;
+			} else if ((currentTab instanceof JSplitPane) && ((JSplitPane)currentTab).getTopComponent() instanceof JTabbedPane) {
+				ProjectPanel project = (ProjectPanel)(((JTabbedPane)(((JSplitPane)currentTab).getTopComponent())).getComponentAt(0));
+				for(int i = 0; i < assemblyStages.length; i++){
+					ShaderCheckBox scb = project.getStage(i);
+					int tabIndex = scb.parent.indexOfTab(scb.target);
+					
+					
+					try {
+						System.out.println("Compiling " + scb.target);
+						//JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
+						//Files.write((new File(scb.source,scb.target)).toPath(), ((JEditorPane)(jsp.getViewport().getView())).getText().getBytes());
+					} catch (ArrayIndexOutOfBoundsException e) {
+						System.out.println("No " + scb.getText() + ", skipping.");
 					}
-				} else {
-					throw new IllegalStateException("An unknown tab has appeared. Run away?");
+					
 				}
-				
-			} catch(LWJGLException e) {
-				e.printStackTrace();
-			}
+			} else {
+				throw new IllegalStateException("An unknown tab has appeared. Run away?");
+				}
 		} else {
-			System.err.println("We have no display! Can't compile");
+			System.err.println("We have no compiler!");
 		}
 		
 	}
