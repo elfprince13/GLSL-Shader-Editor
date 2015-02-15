@@ -1,24 +1,14 @@
 package net.cemetech.sfgp.glsl.editor;
 
 import java.awt.BorderLayout;
-
-import org.jdesktop.swingx.*;
-import org.jdesktop.swingx.MultiSplitLayout.Node;
-
 import java.awt.Component;
-import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
 import java.awt.LayoutManager;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.XMLDecoder;
@@ -30,39 +20,29 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComponent;
-import javax.swing.JFileChooser;
-import javax.swing.JList;
-import javax.swing.JMenu;
-import javax.swing.JMenuBar;
-import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
-import javax.swing.JSeparator;
-import javax.swing.JSplitPane;
-import javax.swing.JToolBar;
 import javax.swing.JEditorPane;
-import javax.swing.JFrame;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
-import javax.swing.KeyStroke;
-import javax.swing.WindowConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.Document;
 
-import org.lwjgl.*;
-import org.lwjgl.opengl.*;
-import org.lwjgl.opengl.GL11.*;
-
-import jsyntaxpane.DefaultSyntaxKit;
+import org.jdesktop.swingx.MultiSplitLayout;
+import org.jdesktop.swingx.MultiSplitLayout.Node;
+import org.jdesktop.swingx.MultiSplitPane;
+import org.lwjgl.LWJGLException;
+import org.lwjgl.opengl.Display;
 
 public class GLSLEditorPane extends JPanel implements ActionListener, DocumentListener, PropertyChangeListener {
 
@@ -71,10 +51,10 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 	
 	JTabbedPane projectsPane;
 	
-	JButton newShader;
-	JButton openShader;
-	JButton resetPipeline;
-	JButton openPipeline;
+	public JButton newShader;
+	public JButton openShader;
+	public JButton resetPipeline;
+	public JButton openPipeline;
 	JPanel welcomePanel;
 
 	JList assetsList;
@@ -89,98 +69,6 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 	File lastDir = null;
 	CompilerImpl compiler = null;
 	
-	public static void main(String[] args) {
-		final String ldPath = (args.length > 0) ? args[0] : "";
-		
-		java.awt.EventQueue.invokeLater(new Runnable() {
-
-			@Override
-			public void run() {
-				JMenuBar mb = new JMenuBar();
-				JMenu file, edit, run;
-				final JMenuItem save, open, newMenu, openPipe, resetPipe, compile;
-				
-				file = new JMenu("File");
-				edit = new JMenu("Edit");
-				run = new JMenu("Run");
-				
-				newMenu = new JMenuItem("New");
-				newMenu.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,ActionEvent.META_MASK));
-				file.add(newMenu);
-				
-				open = new JMenuItem("Open");
-				open.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O,ActionEvent.META_MASK));
-				file.add(open);
-				
-				save = new JMenuItem("Save");
-				save.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S,ActionEvent.META_MASK));
-				file.add(save);
-				
-				file.add(new JSeparator());
-				
-				resetPipe = new JMenuItem("Reset Pipeline");
-				resetPipe.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N,ActionEvent.META_MASK | ActionEvent.SHIFT_MASK));
-				file.add(resetPipe);
-				
-				openPipe = new JMenuItem("Open Pipeline");
-				openPipe.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O,ActionEvent.META_MASK | ActionEvent.SHIFT_MASK));
-				file.add(openPipe);
-				
-				compile = new JMenuItem("Compile");
-				compile.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, ActionEvent.META_MASK));
-				run.add(compile);
-				
-				mb.add(file);
-				mb.add(edit);
-				mb.add(run);
-				
-				JFrame f = new JFrame("SFGP Shader Editor");
-				f.setJMenuBar(mb);
-				final Container c = f.getContentPane();
-				c.setLayout(new BorderLayout());
-				final GLSLEditorPane editor = new GLSLEditorPane("",ldPath,null);
-				c.add(editor, BorderLayout.CENTER);
-				c.doLayout();
-
-
-				f.setSize(1000, 700);
-				f.setVisible(true);
-				f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-				
-				ActionListener menuListener = new ActionListener() {
-					public void actionPerformed(ActionEvent e){
-						if (e.getSource() == save) {
-							editor.saveCurrent();
-						} else if (e.getSource() == compile) {
-							editor.compileCurrent();
-						} else if (e.getSource() == open) {
-							ActionEvent relay = new ActionEvent(editor.openShader, e.getID(), e.getActionCommand());
-							editor.actionPerformed(relay);
-						} else if (e.getSource() == newMenu) {
-							ActionEvent relay = new ActionEvent(editor.newShader, e.getID(), e.getActionCommand());
-							editor.actionPerformed(relay);
-						} else if (e.getSource() == openPipe) {
-							ActionEvent relay = new ActionEvent(editor.openPipeline, e.getID(), e.getActionCommand());
-							editor.actionPerformed(relay);
-						} else if (e.getSource() == resetPipe) {
-							ActionEvent relay = new ActionEvent(editor.resetPipeline, e.getID(), e.getActionCommand());
-							editor.actionPerformed(relay);
-						} else {
-							throw new IllegalStateException("Imaginary menu item registered an ActionEvent: " + e.getSource());
-						}
-					}
-				};
-				
-				compile.addActionListener(menuListener);
-				newMenu.addActionListener(menuListener);
-				open.addActionListener(menuListener);
-				save.addActionListener(menuListener);
-				resetPipe.addActionListener(menuListener);
-				openPipe.addActionListener(menuListener);
-
-			}
-		});
-	}
 
 	public GLSLEditorPane(String lastLayout, String lastDirPath, CompilerImpl c) {
 		setLayout(new BorderLayout());
