@@ -20,7 +20,12 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+
+import org.apache.commons.io.FilenameUtils;
+
 import java.nio.file.Files;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -39,6 +44,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.Document;
 
 import net.cemetech.sfgp.glsl.compile.CompilerImpl;
+import net.cemetech.sfgp.glsl.compile.CompilerTaskSpec;
+import net.cemetech.sfgp.glsl.compile.TaskResult;
 
 import org.jdesktop.swingx.MultiSplitLayout;
 import org.jdesktop.swingx.MultiSplitLayout.Node;
@@ -62,9 +69,28 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 	String[] defaultTargets = {"Display"};
 	JList stagesList;
 	
-	String[] assemblyStages = {"vertex.vert", "geometry.geom", "fragment.frag"};
+	static final String[] shaderKindStrings = {"vertex", "geometry", "fragment"};
+	static final int GL_VERTEX_SHADER	= 35633;
+	static final int GL_GEOMETRY_SHADER	= 36313;
+	static final int GL_FRAGMENT_SHADER	= 35632;
+	static final int[] shaderKindConsts = {GL_VERTEX_SHADER, GL_GEOMETRY_SHADER, GL_FRAGMENT_SHADER};
+	static final String[] assemblyStages;
+	static final Map<String,Integer> ext2Kinds;
 	
+	static{
+		assemblyStages = new String[shaderKindStrings.length];
+		ext2Kinds = new HashMap<String,Integer>();
+		for(int i = 0; i < assemblyStages.length; i++){
+			String shaderKind = shaderKindStrings[i];
+			String ext = shaderKind.substring(0, 4);
+			assemblyStages[i] = shaderKind + "." + ext;
+			ext2Kinds.put(ext, shaderKindConsts[i]);
+		}
+	}
+
+		
 	public static String shaderTemplate = "#version 330 core\n\nvoid main() {\n\t// TODO auto-generated shader stub\n}\n";
+	
 	
 	File lastDir = null;
 	CompilerImpl compiler = null;
@@ -405,17 +431,34 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 				ProjectPanel project = (ProjectPanel)(((JTabbedPane)(((JSplitPane)currentTab).getTopComponent())).getComponentAt(0));
 				for(int i = 0; i < assemblyStages.length; i++){
 					ShaderCheckBox scb = project.getStage(i);
-					int tabIndex = scb.parent.indexOfTab(scb.target);
-					
-					
-					try {
-						System.out.println("Compiling " + scb.target);
-						//JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
-						//Files.write((new File(scb.source,scb.target)).toPath(), ((JEditorPane)(jsp.getViewport().getView())).getText().getBytes());
-					} catch (ArrayIndexOutOfBoundsException e) {
-						System.out.println("No " + scb.getText() + ", skipping.");
-					}
-					
+					if(scb.isSelected()){
+						int tabIndex = scb.parent.indexOfTab(scb.target);						
+						try {
+							System.out.print("Compiling " + scb.target + " ... \t");
+							JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
+							//Files.write((new File(scb.source,scb.target)).toPath(), ((JEditorPane)(jsp.getViewport().getView())).getText().getBytes());
+							
+							String src = ((JEditorPane)(jsp.getViewport().getView())).getText();
+							
+							String ext = FilenameUtils.getExtension(scb.target);
+							int kind = ext2Kinds.get(ext).intValue();
+							//System.out.println(ext + " -> " + kind);
+							CompilerTaskSpec thisSpec = new CompilerTaskSpec(kind, src);
+							thisSpec.setCompiler(compiler);
+							TaskResult<CompilerTaskSpec> result = thisSpec.call();
+							System.out.println("Done");
+							if(result.useable()){
+								System.out.println("Compilation successful!");
+							} else{
+								System.err.println("Compilation Failed. Error log follows:");
+								System.err.println(result.getLoggingResults());
+							}
+							
+						} catch (ArrayIndexOutOfBoundsException e) {
+							System.out.println("No " + scb.getText() + ", skipping.");
+						}
+	
+					}					
 				}
 			} else {
 				throw new IllegalStateException("An unknown tab has appeared. Run away?");

@@ -8,6 +8,9 @@ public class TaskResult<T extends TaskSpec<T>> {
 		loggingResults = log;
 	}
 	
+	public int getResultId(){ return resultId; }
+	public String getLoggingResults(){ return loggingResults; }
+	
 	public boolean useable() {
 		return resultId != 0;
 	}
