@@ -449,6 +449,7 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 							System.out.println("Done");
 							if(result.useable()){
 								System.out.println("Compilation successful!");
+								compiler.cleanCompileResult(result);
 							} else{
 								System.err.println("Compilation Failed. Error log follows:");
 								System.err.println(result.getLoggingResults());
