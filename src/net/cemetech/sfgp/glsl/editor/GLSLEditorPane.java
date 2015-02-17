@@ -25,6 +25,7 @@ import org.apache.commons.io.FilenameUtils;
 
 import java.nio.file.Files;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 
 import javax.swing.BorderFactory;
@@ -394,80 +395,96 @@ public class GLSLEditorPane extends JPanel implements ActionListener, DocumentLi
 			}
 		}
 	}
-
 	
-	public void saveCurrent() {
-		Component currentTab = (projectsPane.getSelectedComponent());
-		if ((currentTab instanceof JPanel) && currentTab == welcomePanel) { 
-			return;
-		} else if ((currentTab instanceof JSplitPane) && ((JSplitPane)currentTab).getTopComponent() instanceof JTabbedPane) {
-			ProjectPanel project = (ProjectPanel)(((JTabbedPane)(((JSplitPane)currentTab).getTopComponent())).getComponentAt(0));
-			for(int i = 0; i < assemblyStages.length; i++){
-				ShaderCheckBox scb = project.getStage(i);
-				int tabIndex = scb.parent.indexOfTab(scb.target);
-				try {
-					JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
-					Files.write((new File(scb.source,scb.target)).toPath(), ((JEditorPane)(jsp.getViewport().getView())).getText().getBytes());
-				} catch (IOException e) {
-					e.printStackTrace();
-					return;
-				} catch (ArrayIndexOutOfBoundsException e) {
-					System.out.println("No " + scb.getText() + ", skipping.");
-				}
-			}
+	private String retrieveShaderSource(ShaderCheckBox scb) {
+		int tabIndex = scb.parent.indexOfTab(scb.target);
+		if(tabIndex < 0){
+			JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
+			String source = ((JEditorPane)(jsp.getViewport().getView())).getText();
+			return source;
 		} else {
-			throw new IllegalStateException("An unknown tab has appeared. Run away?");
+			System.err.println("No " + scb.getText() + ", skipping.");	
+			return null;
 		}
 	}
 	
+	private LinkedList<ShaderCheckBox> activeShadersForProject(ProjectPanel project) {
+		LinkedList<ShaderCheckBox> activeShaders = new LinkedList<ShaderCheckBox>();
+		for(int i = 0; i < assemblyStages.length; i++){
+			ShaderCheckBox scb = project.getStage(i);
+			if(scb.isSelected()){
+				activeShaders.add(scb);
+			}
+		}
+		return activeShaders;
+	}
 	
+	private ProjectPanel getCurrentProject(){
+		Component currentTab = (projectsPane.getSelectedComponent());
+		ProjectPanel project;
+		if ((currentTab instanceof JPanel) && currentTab == welcomePanel) { 
+			project = null;
+		} else if ((currentTab instanceof JSplitPane) && ((JSplitPane)currentTab).getTopComponent() instanceof JTabbedPane) {
+			project = (ProjectPanel)(((JTabbedPane)(((JSplitPane)currentTab).getTopComponent())).getComponentAt(0));
+		} else {
+			throw new IllegalStateException("An unknown tab has appeared. Run away?");
+		}
+		return project;
+	}
+	
+	public void saveCurrent() {
+		ProjectPanel project = getCurrentProject();
+		if(project != null){
+			LinkedList<ShaderCheckBox> activeShaders = activeShadersForProject(project);
+			for(ShaderCheckBox scb : activeShaders) {
+				String src = retrieveShaderSource(scb);
+				if(src != null){
+					try {
+						Files.write((new File(scb.source,scb.target)).toPath(), src.getBytes());
+					} catch (IOException e) {
+						e.printStackTrace();
+						return;
+					}
+				}
+			}
+		} else {
+			System.err.println("Nothing to save: no project is current.");
+		}
+
+	}
 	
 	public void compileCurrent() {
 		if(compiler != null){
-			Component currentTab = (projectsPane.getSelectedComponent());
-			if ((currentTab instanceof JPanel) && currentTab == welcomePanel) { 
-				return;
-			} else if ((currentTab instanceof JSplitPane) && ((JSplitPane)currentTab).getTopComponent() instanceof JTabbedPane) {
-				ProjectPanel project = (ProjectPanel)(((JTabbedPane)(((JSplitPane)currentTab).getTopComponent())).getComponentAt(0));
-				for(int i = 0; i < assemblyStages.length; i++){
-					ShaderCheckBox scb = project.getStage(i);
-					if(scb.isSelected()){
-						int tabIndex = scb.parent.indexOfTab(scb.target);						
-						try {
-							System.out.print("Compiling " + scb.target + " ... \t");
-							JScrollPane jsp = (JScrollPane)(scb.parent.getComponentAt(tabIndex));
-							//Files.write((new File(scb.source,scb.target)).toPath(), ((JEditorPane)(jsp.getViewport().getView())).getText().getBytes());
-							
-							String src = ((JEditorPane)(jsp.getViewport().getView())).getText();
-							
-							String ext = FilenameUtils.getExtension(scb.target);
-							int kind = ext2Kinds.get(ext).intValue();
-							//System.out.println(ext + " -> " + kind);
-							CompilerTaskSpec thisSpec = new CompilerTaskSpec(kind, src);
-							thisSpec.setCompiler(compiler);
-							TaskResult<CompilerTaskSpec> result = thisSpec.call();
-							System.out.println("Done");
-							if(result.useable()){
-								System.out.println("Compilation successful!");
-								compiler.cleanCompileResult(result);
-							} else{
-								System.err.println("Compilation Failed. Error log follows:");
-								System.err.println(result.getLoggingResults());
-							}
-							
-						} catch (ArrayIndexOutOfBoundsException e) {
-							System.out.println("No " + scb.getText() + ", skipping.");
+			ProjectPanel project = getCurrentProject();
+			if(project != null){
+				LinkedList<ShaderCheckBox> activeShaders = activeShadersForProject(project);
+				for(ShaderCheckBox scb : activeShaders) {
+					System.out.print("Compiling " + scb.target + " ... \t");
+					String src = retrieveShaderSource(scb);
+					if(src != null){
+						String ext = FilenameUtils.getExtension(scb.target);
+						int kind = ext2Kinds.get(ext).intValue();
+						//System.out.println(ext + " -> " + kind);
+						CompilerTaskSpec thisSpec = new CompilerTaskSpec(kind, src);
+						thisSpec.setCompiler(compiler);
+						TaskResult<CompilerTaskSpec> result = thisSpec.call();
+						System.out.println("Done");
+						if(result.useable()){
+							System.out.println("Compilation successful!");
+							compiler.cleanCompileResult(result);
+						} else{
+							System.err.println("Compilation Failed. Error log follows:");
+							System.err.println(result.getLoggingResults());
 						}
-	
-					}					
+					}
 				}
 			} else {
-				throw new IllegalStateException("An unknown tab has appeared. Run away?");
-				}
+				System.err.println("Nothing to save: no project is current.");
+			}
+			
 		} else {
 			System.err.println("We have no compiler!");
 		}
-		
 	}
 	
 	public int stageIndex(String stageName){
